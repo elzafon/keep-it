@@ -1,5 +1,12 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { addVoucher } from '../db'
+
+/*
+  טעינה עצלה (code splitting): ספריית הסריקה שוקלת ~0.5MB,
+  אז במקום לייבא אותה רגיל — lazy() מפצל אותה לקובץ נפרד
+  שהדפדפן מוריד רק כשלוחצים "סרוק" בפעם הראשונה.
+*/
+const BarcodeScanner = lazy(() => import('./BarcodeScanner'))
 
 /*
   טופס הוספת שובר — דוגמה קלאסית ל"controlled inputs":
@@ -18,6 +25,7 @@ export default function AddVoucherForm({ onClose }) {
     notes: '',
   })
   const [error, setError] = useState('')
+  const [scanning, setScanning] = useState(false)
 
   // פונקציית עדכון אחת לכל השדות: לפי ה-name של ה-input
   function handleChange(e) {
@@ -44,7 +52,7 @@ export default function AddVoucherForm({ onClose }) {
   return (
     <div className="mx-auto max-w-md">
       <h2 className="font-display text-2xl font-bold">שובר חדש</h2>
-      <p className="mb-6 text-faint">בשלב הבא נוסיף סריקת ברקוד במצלמה 📷</p>
+      <p className="mb-6 text-faint">מלא ידנית או סרוק את הברקוד במצלמה</p>
 
       <div className="flex flex-col gap-4">
         <label>
@@ -84,15 +92,45 @@ export default function AddVoucherForm({ onClose }) {
 
         <label>
           <span className="mb-1 block font-semibold">מספר ברקוד</span>
-          <input
-            name="barcode"
-            inputMode="numeric"
-            dir="ltr"
-            value={form.barcode}
-            onChange={handleChange}
-            className={`${field} font-mono`}
-          />
+          <div className="flex gap-2">
+            <input
+              name="barcode"
+              inputMode="numeric"
+              dir="ltr"
+              value={form.barcode}
+              onChange={handleChange}
+              placeholder="הקלד או סרוק"
+              className={`${field} font-mono`}
+            />
+            <button
+              type="button"
+              onClick={() => setScanning(true)}
+              className="shrink-0 rounded-xl bg-keep-deep px-4 font-semibold text-white hover:opacity-90"
+            >
+              📷 סרוק
+            </button>
+          </div>
         </label>
+
+        {/* הסורק מוצג רק כש-scanning פעיל — רינדור מותנה */}
+        {scanning && (
+          // Suspense מציג fallback בזמן שהקובץ של הסורק יורד
+          <Suspense
+            fallback={
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-keep-deep font-semibold text-white">
+                טוען סורק...
+              </div>
+            }
+          >
+            <BarcodeScanner
+              onDetected={(code) => {
+                setForm((prev) => ({ ...prev, barcode: code }))
+                setScanning(false)
+              }}
+              onClose={() => setScanning(false)}
+            />
+          </Suspense>
+        )}
 
         <label>
           <span className="mb-1 block font-semibold">בתוקף עד</span>

@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { toggleRedeemed, deleteVoucher } from '../db'
 import { expiryStatus, expiryLabel } from '../utils/expiry'
+import BarcodeModal from './BarcodeModal'
 
 /*
   כרטיס שובר בודד.
@@ -18,6 +20,7 @@ const statusStyles = {
 export default function VoucherCard({ voucher }) {
   const status = expiryStatus(voucher.expiry)
   const isRedeemed = Boolean(voucher.redeemed)
+  const [showBarcode, setShowBarcode] = useState(false)
 
   return (
     <article
@@ -40,9 +43,17 @@ export default function VoucherCard({ voucher }) {
         </div>
 
         {voucher.barcode && (
-          <p className="mt-2 font-mono text-xs tracking-widest text-faint" dir="ltr">
-            {voucher.barcode}
-          </p>
+          <button
+            onClick={() => setShowBarcode(true)}
+            className="mt-2 flex items-center gap-2 rounded-lg bg-mist px-2 py-1 text-xs font-semibold text-ink hover:bg-keep/10"
+          >
+            <span aria-hidden>▮▯▮</span>
+            הצג ברקוד לסריקה
+          </button>
+        )}
+
+        {showBarcode && (
+          <BarcodeModal voucher={voucher} onClose={() => setShowBarcode(false)} />
         )}
         {voucher.notes && <p className="mt-1 text-sm">{voucher.notes}</p>}
       </div>
