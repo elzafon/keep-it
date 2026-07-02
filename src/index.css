@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/*
+  מערכת העיצוב של KeepIt
+  ------------------------
+  ב-Tailwind v4 מגדירים "טוקנים" של עיצוב ישירות ב-CSS.
+  כל טוקן כאן הופך אוטומטית למחלקת Tailwind:
+  --color-keep  =>  bg-keep, text-keep, border-keep וכו'.
+*/
+@theme {
+  /* צבעים */
+  --color-ink: #14282e;        /* טקסט ראשי — פטרול כהה */
+  --color-mist: #eef2ee;       /* רקע העמוד — ירקרק־אפור רך */
+  --color-card: #ffffff;       /* רקע כרטיסים */
+  --color-keep: #0e7c66;       /* ירוק "שמירה" — הצבע הראשי */
+  --color-keep-deep: #12332e;  /* גרסה כהה לכותרת העליונה */
+  --color-amber: #d98a2b;      /* אזהרה — פג תוקף בקרוב */
+  --color-danger: #c94f42;     /* פג תוקף / מחיקה */
+  --color-faint: #64747a;      /* טקסט משני */
+
+  /* טיפוגרפיה */
+  --font-display: "Rubik", sans-serif;    /* כותרות ומספרים */
+  --font-body: "Assistant", sans-serif;   /* טקסט רץ */
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--color-mist);
+  color: var(--color-ink);
+}
+
+/*
+  האלמנט החתימתי: כרטיס־שובר עם "נקבים" בצדדים כמו תלוש אמיתי.
+  שני עיגולים בצבע הרקע "נוגסים" בקצוות הכרטיס, בגובה קו הניקוב.
+*/
+.ticket {
+  position: relative;
+}
+.ticket::before,
+.ticket::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-mist);
+  transform: translateY(-50%);
+}
+.ticket::before { right: -9px; }
+.ticket::after  { left: -9px; }
+
+/* קו הניקוב — גבול מקווקו אנכי בין גוף הכרטיס לספח */
+.perforation {
+  border-inline-start: 2px dashed #d5ddd5;
+}
