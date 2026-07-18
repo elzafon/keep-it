@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db, markNotified } from './db'
+import { markNotified } from './db'
+import { useVouchers } from './hooks/useVouchers'
+import { supabase } from './supabaseClient'
 import { daysLeft, expiryLabel } from './utils/expiry'
 import VoucherCard from './components/VoucherCard'
 import AddVoucherForm from './components/AddVoucherForm'
 import PasteVouchers from './components/PasteVouchers'
 import EmptyState from './components/EmptyState'
+import Login from './components/Login'
 
 /*
   הקומפוננטה הראשית.
@@ -26,16 +28,25 @@ export default function App() {
   const [notifPermission, setNotifPermission] = useState(
     typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
   )
+  // מצב האימות: session = המשתמש המחובר (null = לא מחובר)
+  const [session, setSession] = useState(null)
+  const [authReady, setAuthReady] = useState(false)
 
-  // שליפה חיה מהמסד, ממוינת: קרוב-לפוג קודם, ללא-תוקף בסוף
-  const vouchers = useLiveQuery(async () => {
-    const all = await db.vouchers.toArray()
-    return all.sort((a, b) => {
-      const da = daysLeft(a.expiry) ?? Infinity
-      const db_ = daysLeft(b.expiry) ?? Infinity
-      return da - db_
+  // בטעינה: קוראים את ה-session הקיים ומאזינים לשינויים (כניסה/יציאה)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      setAuthReady(true)
     })
-  })
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
+    return () => sub.subscription.unsubscribe()
+  }, [])
+
+  // שליפה מ-Supabase עם עדכון בזמן אמת, ואז מיון: קרוב-לפוג קודם
+  const raw = useVouchers()
+  const vouchers =
+    raw &&
+    [...raw].sort((a, b) => (daysLeft(a.expiry) ?? Infinity) - (daysLeft(b.expiry) ?? Infinity))
 
   /*
     תופעת לוואי (side effect): בכל פעם ש-vouchers מתעדכן, בודקים אם יש
@@ -69,6 +80,10 @@ export default function App() {
     setNotifPermission(result)
   }
 
+  async function signOut() {
+    await supabase.auth.signOut()
+  }
+
   function openAdd() {
     setEditing(null)
     setAddTab('manual')
@@ -85,7 +100,11 @@ export default function App() {
     setScreen('dashboard')
   }
 
-  // עד שהשליפה הראשונה מסתיימת, vouchers הוא undefined
+  // שער אימות: עד שקראנו את ה-session — לא מציגים כלום; בלי session — מסך כניסה
+  if (!authReady) return null
+  if (!session) return <Login />
+
+  // עד שהשליפה הראשונה מסתיימת, vouchers הוא null
   if (!vouchers) return null
 
   const active = vouchers.filter((v) => !v.redeemed)
@@ -107,14 +126,22 @@ export default function App() {
                 : 'שומר על הכסף שלך'}
             </p>
           </div>
-          {notifPermission === 'default' && (
+          <div className="flex items-center gap-2">
+            {notifPermission === 'default' && (
+              <button
+                onClick={enableReminders}
+                className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20"
+              >
+                🔔 הפעל תזכורות
+              </button>
+            )}
             <button
-              onClick={enableReminders}
+              onClick={signOut}
               className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20"
             >
-              🔔 הפעל תזכורות
+              התנתק
             </button>
-          )}
+          </div>
         </div>
       </header>
 
