@@ -37,7 +37,7 @@ export function parseVouchers(text) {
   // תיאור ההטבה: מה שבין "הקוד למימוש ההטבה" ל-"הינו".
   // מנקים "ברשת <עסק>" מהסוף כי זה כבר יושב בשדה business.
   const benefitMatch = text.match(/הקוד למימוש ההטבה\s+([\s\S]+?)\s+הינו/)
-  const notes = benefitMatch
+  const benefit = benefitMatch
     ? benefitMatch[1].trim().replace(/\s*ברשת\s+\S+\s*$/, '').trim()
     : ''
 
@@ -67,6 +67,7 @@ export function parseVouchers(text) {
     barcode: code.replace(/-/g, ''), // שומרים ספרות רצופות, בלי מקפים
     cvv: cvvs[i] ?? '',
     expiry: sharedExpiry || monthExps[i] || '',
-    notes,
+    benefit,
+    notes: '',
   }))
 }

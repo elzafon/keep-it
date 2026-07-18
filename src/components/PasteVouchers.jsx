@@ -180,6 +180,14 @@ export default function PasteVouchers({ onClose }) {
                 />
               </label>
               <label className="col-span-2">
+                <span className={miniLabel}>הטבה / מה מקבלים</span>
+                <input
+                  value={row.benefit}
+                  onChange={(e) => updateRow(i, 'benefit', e.target.value)}
+                  className={field}
+                />
+              </label>
+              <label className="col-span-2">
                 <span className={miniLabel}>הערות</span>
                 <input
                   value={row.notes}

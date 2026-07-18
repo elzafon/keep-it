@@ -45,6 +45,10 @@ export default function VoucherCard({ voucher, onEdit }) {
           </span>
         </div>
 
+        {voucher.benefit && (
+          <p className="mt-2 text-sm font-semibold text-ink">🎁 {voucher.benefit}</p>
+        )}
+
         {voucher.barcode && (
           <button
             onClick={() => setShowBarcode(true)}

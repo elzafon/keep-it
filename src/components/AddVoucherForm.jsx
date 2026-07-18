@@ -28,6 +28,7 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
           source: voucher.source ?? '',
           type: voucher.type ?? 'גיפט קארד',
           amount: voucher.amount ?? '',
+          benefit: voucher.benefit ?? '',
           barcode: voucher.barcode ?? '',
           cvv: voucher.cvv ?? '',
           expiry: voucher.expiry ?? '',
@@ -38,6 +39,7 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
           source: '',
           type: 'גיפט קארד',
           amount: '',
+          benefit: '',
           barcode: '',
           cvv: '',
           expiry: '',
@@ -127,6 +129,17 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
             />
           </label>
         </div>
+
+        <label>
+          <span className="mb-1 block font-semibold">הטבה / מה מקבלים</span>
+          <input
+            name="benefit"
+            value={form.benefit}
+            onChange={handleChange}
+            placeholder="למשל: 10% הנחה, משקה גודל S"
+            className={field}
+          />
+        </label>
 
         <label>
           <span className="mb-1 block font-semibold">מספר ברקוד</span>
