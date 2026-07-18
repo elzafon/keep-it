@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { addVoucher, updateVoucher } from '../db'
 
 /*
@@ -33,6 +33,7 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
           cvv: voucher.cvv ?? '',
           expiry: voucher.expiry ?? '',
           notes: voucher.notes ?? '',
+          image: voucher.image ?? null,
         }
       : {
           business: '',
@@ -44,15 +45,39 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
           cvv: '',
           expiry: '',
           notes: '',
+          image: null,
         },
   )
   const [error, setError] = useState('')
   const [scanning, setScanning] = useState(false)
+  const [imageUrl, setImageUrl] = useState(null)
+
+  // תצוגה מקדימה של התמונה: יוצרים object URL מה-Blob ומשחררים אותו בניקוי.
+  // בלי ה-revoke נדלוף זיכרון — בדיוק כמו ה-cleanup החשוב בסורק הברקוד.
+  useEffect(() => {
+    if (!form.image) {
+      setImageUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(form.image)
+    setImageUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [form.image])
 
   // פונקציית עדכון אחת לכל השדות: לפי ה-name של ה-input
   function handleChange(e) {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
+  }
+
+  // קלט קובץ מחזיר File (שהוא תת-סוג של Blob) — שומרים אותו כמו שהוא ב-state
+  function handleImageChange(e) {
+    const file = e.target.files?.[0] ?? null
+    setForm((prev) => ({ ...prev, image: file }))
+  }
+
+  function removeImage() {
+    setForm((prev) => ({ ...prev, image: null }))
   }
 
   async function handleSave() {
@@ -217,6 +242,33 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
             className={field}
           />
         </label>
+
+        <div>
+          <span className="mb-1 block font-semibold">תמונה מצורפת</span>
+          {imageUrl ? (
+            <div className="relative inline-block">
+              <img
+                src={imageUrl}
+                alt="תצוגה מקדימה של התמונה"
+                className="max-h-48 rounded-xl border border-ink/10"
+              />
+              <button
+                type="button"
+                onClick={removeImage}
+                className="absolute left-2 top-2 rounded-full bg-danger px-2 py-0.5 text-sm font-bold text-white hover:opacity-90"
+              >
+                ✕ הסר
+              </button>
+            </div>
+          ) : (
+            <label
+              className={`${field} flex cursor-pointer items-center justify-center gap-2 text-faint hover:text-ink`}
+            >
+              📎 בחר תמונה או צלם
+              <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+            </label>
+          )}
+        </div>
 
         {error && <p className="font-semibold text-danger">{error}</p>}
 
