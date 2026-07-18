@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toggleRedeemed, deleteVoucher } from '../db'
 import { expiryStatus, expiryLabel } from '../utils/expiry'
 import BarcodeModal from './BarcodeModal'
+import ImageModal from './ImageModal'
 
 /*
   כרטיס שובר בודד.
@@ -21,6 +22,19 @@ export default function VoucherCard({ voucher, onEdit }) {
   const status = expiryStatus(voucher.expiry)
   const isRedeemed = Boolean(voucher.redeemed)
   const [showBarcode, setShowBarcode] = useState(false)
+  const [showImage, setShowImage] = useState(false)
+  const [imageUrl, setImageUrl] = useState(null)
+
+  // יוצרים object URL מה-Blob להצגה, ומשחררים אותו בניקוי (מונע דליפת זיכרון)
+  useEffect(() => {
+    if (!voucher.image) {
+      setImageUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(voucher.image)
+    setImageUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [voucher.image])
 
   return (
     <article
@@ -65,8 +79,21 @@ export default function VoucherCard({ voucher, onEdit }) {
           </p>
         )}
 
+        {imageUrl && (
+          <button type="button" onClick={() => setShowImage(true)} className="mt-2 block">
+            <img
+              src={imageUrl}
+              alt="תמונת השובר"
+              className="h-16 rounded-lg border border-ink/10 object-cover"
+            />
+          </button>
+        )}
+
         {showBarcode && (
           <BarcodeModal voucher={voucher} onClose={() => setShowBarcode(false)} />
+        )}
+        {showImage && imageUrl && (
+          <ImageModal url={imageUrl} onClose={() => setShowImage(false)} />
         )}
         {voucher.notes && <p className="mt-1 text-sm">{voucher.notes}</p>}
       </div>
