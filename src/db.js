@@ -58,7 +58,10 @@ async function loadImage(path) {
   if (!path) return null
   if (imageCache.has(path)) return imageCache.get(path)
   const { data, error } = await supabase.storage.from(BUCKET).download(path)
-  if (error) return null
+  if (error) {
+    console.warn('[KeepIt] הורדת תמונה נכשלה:', path, error.message)
+    return null
+  }
   imageCache.set(path, data)
   return data
 }
