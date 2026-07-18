@@ -8,14 +8,23 @@ import { fetchVouchers } from '../db'
   2. מנוי Realtime: כל שינוי בטבלה (הוספה/עדכון/מחיקה, גם מהמכשיר של
      בן/בת הזוג) מפעיל שליפה מחדש — כך שני הצדדים רואים אותו מצב.
 
+  חשוב: נרשמים ל-Realtime רק כשיש משתמש מחובר (session). Realtime מכבד
+  RLS, ולכן הערוץ חייב token מחובר כדי לקבל אירועים. לכן ה-effect תלוי
+  ב-userId — הוא נבנה מחדש בכניסה/יציאה.
+
   מחזיר null בזמן הטעינה הראשונה (כמו useLiveQuery), ואז מערך שוברים.
 */
-export function useVouchers() {
+export function useVouchers(session) {
   const [vouchers, setVouchers] = useState(null)
+  const userId = session?.user?.id
 
   useEffect(() => {
-    let active = true
+    if (!userId) {
+      setVouchers(null)
+      return
+    }
 
+    let active = true
     const load = () =>
       fetchVouchers()
         .then((data) => active && setVouchers(data))
@@ -33,7 +42,7 @@ export function useVouchers() {
       active = false
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [userId])
 
   return vouchers
 }

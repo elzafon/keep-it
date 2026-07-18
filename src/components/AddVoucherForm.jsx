@@ -128,12 +128,16 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
       business: form.business.trim(),
       amount: form.amount ? Number(form.amount) : null,
     }
-    if (isEdit) {
-      await updateVoucher(voucher.id, payload)
-    } else {
-      await addVoucher(payload)
+    try {
+      if (isEdit) {
+        await updateVoucher(voucher.id, payload)
+      } else {
+        await addVoucher(payload)
+      }
+      onClose() // חוזרים לדשבורד — הרשימה תתעדכן לבד
+    } catch (err) {
+      setError('שמירה נכשלה: ' + (err?.message || String(err)))
     }
-    onClose() // חוזרים לדשבורד — הרשימה תתעדכן לבד
   }
 
   const field =

@@ -42,8 +42,9 @@ export default function App() {
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  // שליפה מ-Supabase עם עדכון בזמן אמת, ואז מיון: קרוב-לפוג קודם
-  const raw = useVouchers()
+  // שליפה מ-Supabase עם עדכון בזמן אמת, ואז מיון: קרוב-לפוג קודם.
+  // מעבירים session כדי שה-hook יירשם ל-Realtime רק כשמחוברים.
+  const raw = useVouchers(session)
   const vouchers =
     raw &&
     [...raw].sort((a, b) => (daysLeft(a.expiry) ?? Infinity) - (daysLeft(b.expiry) ?? Infinity))
