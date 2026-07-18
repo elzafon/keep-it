@@ -47,8 +47,10 @@ export function parseVouchers(text) {
 
   // ---- שדות לכל קופון (מופיעים כמה פעמים) ----
 
-  // כל קודי ה-16 ספרות בפורמט 9376-7601-5496-4429
-  const codes = [...text.matchAll(/קוד:\s*(\d{4}-\d{4}-\d{4}-\d{4})/g)].map((m) => m[1])
+  // מזהים קודים בשני פורמטים של פיס פלוס, בלי להסתמך על המילה "קוד:":
+  //   • מקדונלד'ס — 16 ספרות: 9376-7601-5496-4429
+  //   • Multipass (מפרץ ההרפתקאות / rebar / כאל) — 154346039-2496 (9 ספרות–4)
+  const codes = [...text.matchAll(/(\d{4}-\d{4}-\d{4}-\d{4}|\d{9}-\d{4})/g)].map((m) => m[1])
   // כל קודי האימות (CVV), לפי הסדר
   const cvvs = [...text.matchAll(/קוד\s*אימות:\s*(\d{3,4})/g)].map((m) => m[1])
   // תוקף פר-קופון בפורמט MM/YY (גיבוי אם אין תוקף כללי) → סוף אותו חודש
@@ -64,7 +66,8 @@ export function parseVouchers(text) {
     source,
     type: 'קופון',
     amount: null, // הטבה, לא סכום כספי — נשאר ריק
-    barcode: code.replace(/-/g, ''), // שומרים ספרות רצופות, בלי מקפים
+    // 16 ספרות נשמר רצוף (הקלדה בקופה); Multipass נשמר עם המקף כפי שמוצג
+    barcode: /^\d{4}-\d{4}-\d{4}-\d{4}$/.test(code) ? code.replace(/-/g, '') : code,
     cvv: cvvs[i] ?? '',
     expiry: sharedExpiry || monthExps[i] || '',
     benefit,
