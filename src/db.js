@@ -1,19 +1,21 @@
 import { supabase } from './supabaseClient'
 
 /*
-  שכבת הנתונים — עכשיו מול Supabase (Postgres) במקום IndexedDB.
+  שכבת הנתונים — מול Supabase (Postgres + Storage).
   ------------------------------------------------------------
-  שמות הפונקציות זהים לגרסת Dexie הקודמת, כדי שהקומפוננטות
-  (AddVoucherForm, VoucherCard, PasteVouchers, App) לא ישתנו כמעט בכלל.
+  שמות הפונקציות זהים לגרסת Dexie, כדי שהקומפוננטות לא ישתנו כמעט בכלל.
+  מיפוי שמות: JS camelCase (notifiedOn) ↔ Postgres snake_case (notified_on).
 
-  מיפוי שמות: ב-JS השדות camelCase (notifiedOn), ב-Postgres snake_case
-  (notified_on). הפונקציות fromRow/toRow עושות את ההמרה בשני הכיוונים.
-
-  הערה: שדה התמונה (image, Blob) עדיין לא נשמר כאן — הוא יעבור ל-Supabase
-  Storage בשלב נפרד. עד אז הוא פשוט לא מסונכרן לשרת.
+  תמונות: הבינארי (Blob) לא נשמר בטבלה אלא ב-Supabase Storage (bucket פרטי).
+  בטבלה נשמר רק image_path. בקריאה מורידים את ה-Blob ומחזירים אותו בשדה
+  voucher.image — כך הקומפוננטות (שמצפות ל-Blob) לא משתנות.
 */
 
 const TABLE = 'vouchers'
+const BUCKET = 'voucher-images'
+
+// מטמון תמונות לפי נתיב — כדי לא להוריד שוב בכל ריענון Realtime
+const imageCache = new Map()
 
 // שורה מ-Supabase (snake_case) → אובייקט שובר ב-JS (camelCase)
 function fromRow(row) {
@@ -31,11 +33,12 @@ function fromRow(row) {
     redeemed: row.redeemed ? 1 : 0, // הקומפוננטות משתמשות ב-0/1
     notifiedOn: row.notified_on,
     createdAt: row.created_at,
+    imagePath: row.image_path, // נתיב ב-Storage (לא הבינארי עצמו)
+    image: null, // ה-Blob יטען בנפרד ב-fetchVouchers
   }
 }
 
-// אובייקט טופס → שורה ל-Supabase. משמיטים image (Storage בהמשך).
-// ריק ('') הופך ל-null כדי לא לשבור עמודות date/numeric.
+// אובייקט טופס → עמודות טקסט ל-Supabase. image/imagePath מטופלים בנפרד.
 function toRow(v) {
   return {
     business: v.business,
@@ -50,20 +53,52 @@ function toRow(v) {
   }
 }
 
-/** שליפת כל השוברים (RLS מחזיר רק את מה שמותר למשתמש המחובר) */
+// הורדת Blob מ-Storage (עם מטמון)
+async function loadImage(path) {
+  if (!path) return null
+  if (imageCache.has(path)) return imageCache.get(path)
+  const { data, error } = await supabase.storage.from(BUCKET).download(path)
+  if (error) return null
+  imageCache.set(path, data)
+  return data
+}
+
+// מחזיר את image_path לשמירה: נתיב קיים אם לא השתנה, או העלאה של קובץ חדש
+async function resolveImagePath(v) {
+  if (v.imagePath) return v.imagePath // תמונה קיימת שלא שונתה
+  if (v.image) {
+    const path = crypto.randomUUID()
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, v.image, { contentType: v.image.type || 'image/jpeg' })
+    if (error) throw error
+    imageCache.set(path, v.image)
+    return path
+  }
+  return null // אין תמונה (או שהוסרה)
+}
+
+/** שליפת כל השוברים + הורדת התמונות שלהם */
 export async function fetchVouchers() {
   const { data, error } = await supabase.from(TABLE).select('*')
   if (error) throw error
-  return data.map(fromRow)
+  const vouchers = data.map(fromRow)
+  await Promise.all(
+    vouchers.map(async (v) => {
+      v.image = await loadImage(v.imagePath)
+    }),
+  )
+  return vouchers
 }
 
 /** הוספת שובר חדש */
 export async function addVoucher(voucher) {
-  const { error } = await supabase.from(TABLE).insert(toRow(voucher))
+  const image_path = await resolveImagePath(voucher)
+  const { error } = await supabase.from(TABLE).insert({ ...toRow(voucher), image_path })
   if (error) throw error
 }
 
-/** הוספת כמה שוברים בבת אחת — לזרימת ההדבקה מ-SMS */
+/** הוספת כמה שוברים בבת אחת — לזרימת ההדבקה מ-SMS (בלי תמונות) */
 export async function bulkAddVouchers(list) {
   const { error } = await supabase.from(TABLE).insert(list.map(toRow))
   if (error) throw error
@@ -71,7 +106,11 @@ export async function bulkAddVouchers(list) {
 
 /** עדכון שדות שובר קיים (עריכה מהטופס) */
 export async function updateVoucher(id, changes) {
-  const { error } = await supabase.from(TABLE).update(toRow(changes)).eq('id', id)
+  const image_path = await resolveImagePath(changes)
+  const { error } = await supabase
+    .from(TABLE)
+    .update({ ...toRow(changes), image_path })
+    .eq('id', id)
   if (error) throw error
 }
 

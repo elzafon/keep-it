@@ -34,6 +34,7 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
           expiry: voucher.expiry ?? '',
           notes: voucher.notes ?? '',
           image: voucher.image ?? null,
+          imagePath: voucher.imagePath ?? null,
         }
       : {
           business: '',
@@ -46,6 +47,7 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
           expiry: '',
           notes: '',
           image: null,
+          imagePath: null,
         },
   )
   const [error, setError] = useState('')
@@ -74,12 +76,13 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
   // קלט קובץ מחזיר File (שהוא תת-סוג של Blob) — שומרים אותו כמו שהוא ב-state
   function handleImageChange(e) {
     const file = e.target.files?.[0] ?? null
-    setForm((prev) => ({ ...prev, image: file }))
+    // imagePath: null → מסמן שזו תמונה חדשה שצריך להעלות (לא הקיימת)
+    setForm((prev) => ({ ...prev, image: file, imagePath: null }))
     setScanMsg('')
   }
 
   function removeImage() {
-    setForm((prev) => ({ ...prev, image: null }))
+    setForm((prev) => ({ ...prev, image: null, imagePath: null }))
     setScanMsg('')
   }
 
