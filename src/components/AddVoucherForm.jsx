@@ -51,6 +51,7 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
   const [error, setError] = useState('')
   const [scanning, setScanning] = useState(false)
   const [imageUrl, setImageUrl] = useState(null)
+  const [scanMsg, setScanMsg] = useState('')
 
   // תצוגה מקדימה של התמונה: יוצרים object URL מה-Blob ומשחררים אותו בניקוי.
   // בלי ה-revoke נדלוף זיכרון — בדיוק כמו ה-cleanup החשוב בסורק הברקוד.
@@ -74,10 +75,33 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
   function handleImageChange(e) {
     const file = e.target.files?.[0] ?? null
     setForm((prev) => ({ ...prev, image: file }))
+    setScanMsg('')
   }
 
   function removeImage() {
     setForm((prev) => ({ ...prev, image: null }))
+    setScanMsg('')
+  }
+
+  // שליפת קוד QR/ברקוד מהתמונה המצורפת — מנצל את מנוע @zxing (כמו הסורק),
+  // אבל מפענח מתמונה סטטית במקום ממצלמה. import דינמי כדי לא לנפח את הבאנדל.
+  async function scanFromImage() {
+    if (!form.image) return
+    setScanMsg('סורק...')
+    try {
+      const { BrowserMultiFormatReader } = await import('@zxing/browser')
+      const reader = new BrowserMultiFormatReader()
+      const url = URL.createObjectURL(form.image)
+      try {
+        const result = await reader.decodeFromImageUrl(url)
+        setForm((prev) => ({ ...prev, barcode: result.getText() }))
+        setScanMsg('✓ הקוד נשלף מהתמונה')
+      } finally {
+        URL.revokeObjectURL(url)
+      }
+    } catch {
+      setScanMsg('לא זוהה קוד בתמונה — נסה תמונה ברורה יותר או הקלד ידנית')
+    }
   }
 
   async function handleSave() {
@@ -246,19 +270,29 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
         <div>
           <span className="mb-1 block font-semibold">תמונה מצורפת</span>
           {imageUrl ? (
-            <div className="relative inline-block">
-              <img
-                src={imageUrl}
-                alt="תצוגה מקדימה של התמונה"
-                className="max-h-48 rounded-xl border border-ink/10"
-              />
+            <div className="flex flex-col gap-2">
+              <div className="relative inline-block">
+                <img
+                  src={imageUrl}
+                  alt="תצוגה מקדימה של התמונה"
+                  className="max-h-48 rounded-xl border border-ink/10"
+                />
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="absolute left-2 top-2 rounded-full bg-danger px-2 py-0.5 text-sm font-bold text-white hover:opacity-90"
+                >
+                  ✕ הסר
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={removeImage}
-                className="absolute left-2 top-2 rounded-full bg-danger px-2 py-0.5 text-sm font-bold text-white hover:opacity-90"
+                onClick={scanFromImage}
+                className="self-start rounded-xl bg-keep-deep px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
               >
-                ✕ הסר
+                🔍 שלוף קוד מהתמונה
               </button>
+              {scanMsg && <p className="text-sm text-faint">{scanMsg}</p>}
             </div>
           ) : (
             <label
