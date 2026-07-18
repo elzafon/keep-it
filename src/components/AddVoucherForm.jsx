@@ -89,8 +89,22 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
     if (!form.image) return
     setScanMsg('סורק...')
     try {
-      const { BrowserMultiFormatReader } = await import('@zxing/browser')
-      const reader = new BrowserMultiFormatReader()
+      // @zxing/library הוא dependency של @zxing/browser (משם מגיע DecodeHintType)
+      const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] = await Promise.all([
+        import('@zxing/browser'),
+        import('@zxing/library'),
+      ])
+      // TRY_HARDER = מאמץ זיהוי גדול יותר (חשוב לקוד קטן/מעוצב בתוך צילום מלא)
+      const hints = new Map()
+      hints.set(DecodeHintType.TRY_HARDER, true)
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.QR_CODE,
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.ITF,
+      ])
+      const reader = new BrowserMultiFormatReader(hints)
       const url = URL.createObjectURL(form.image)
       try {
         const result = await reader.decodeFromImageUrl(url)
@@ -100,7 +114,7 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
         URL.revokeObjectURL(url)
       }
     } catch {
-      setScanMsg('לא זוהה קוד בתמונה — נסה תמונה ברורה יותר או הקלד ידנית')
+      setScanMsg('לא זוהה קוד בתמונה — נסה לחתוך את הצילום לאזור הקוד/QR, או הקלד ידנית')
     }
   }
 
