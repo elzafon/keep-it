@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense } from 'react'
-import { addVoucher } from '../db'
+import { addVoucher, updateVoucher } from '../db'
 
 /*
   טעינה עצלה (code splitting): ספריית הסריקה שוקלת ~0.5MB,
@@ -9,21 +9,41 @@ import { addVoucher } from '../db'
 const BarcodeScanner = lazy(() => import('./BarcodeScanner'))
 
 /*
-  טופס הוספת שובר — דוגמה קלאסית ל"controlled inputs":
+  טופס הוספה *ועריכה* בקומפוננטה אחת — דוגמה קלאסית ל"controlled inputs":
   כל שדה בטופס מחובר ל-state, ו-React הוא מקור האמת היחיד לערך שלו.
 
+  voucher (אופציונלי) קובע אם זו עריכה: אם הועבר — הטופס מתמלא מהשובר
+  הקיים ושמירה מעדכנת אותו; אחרת זו הוספה חדשה.
   onClose הוא prop מסוג פונקציה — ככה קומפוננטת-ילד "מדברת" עם ההורה.
 */
-export default function AddVoucherForm({ onClose }) {
-  // אובייקט state אחד לכל הטופס במקום useState לכל שדה
-  const [form, setForm] = useState({
-    business: '',
-    type: 'גיפט קארד',
-    amount: '',
-    barcode: '',
-    expiry: '',
-    notes: '',
-  })
+export default function AddVoucherForm({ onClose, voucher = null }) {
+  const isEdit = Boolean(voucher)
+
+  // Lazy initializer: הפונקציה רצה פעם אחת בלבד ברינדור הראשון.
+  // חשוב בעיקר בעריכה — כדי לא לבנות את אובייקט ההתחלה מחדש בכל הקלדה.
+  const [form, setForm] = useState(() =>
+    isEdit
+      ? {
+          business: voucher.business ?? '',
+          source: voucher.source ?? '',
+          type: voucher.type ?? 'גיפט קארד',
+          amount: voucher.amount ?? '',
+          barcode: voucher.barcode ?? '',
+          cvv: voucher.cvv ?? '',
+          expiry: voucher.expiry ?? '',
+          notes: voucher.notes ?? '',
+        }
+      : {
+          business: '',
+          source: '',
+          type: 'גיפט קארד',
+          amount: '',
+          barcode: '',
+          cvv: '',
+          expiry: '',
+          notes: '',
+        },
+  )
   const [error, setError] = useState('')
   const [scanning, setScanning] = useState(false)
 
@@ -38,11 +58,16 @@ export default function AddVoucherForm({ onClose }) {
       setError('חסר שם של בית העסק')
       return
     }
-    await addVoucher({
+    const payload = {
       ...form,
       business: form.business.trim(),
       amount: form.amount ? Number(form.amount) : null,
-    })
+    }
+    if (isEdit) {
+      await updateVoucher(voucher.id, payload)
+    } else {
+      await addVoucher(payload)
+    }
     onClose() // חוזרים לדשבורד — הרשימה תתעדכן לבד
   }
 
@@ -51,8 +76,10 @@ export default function AddVoucherForm({ onClose }) {
 
   return (
     <div className="mx-auto max-w-md">
-      <h2 className="font-display text-2xl font-bold">שובר חדש</h2>
-      <p className="mb-6 text-faint">מלא ידנית או סרוק את הברקוד במצלמה</p>
+      <h2 className="font-display text-2xl font-bold">{isEdit ? 'עריכת שובר' : 'שובר חדש'}</h2>
+      <p className="mb-6 text-faint">
+        {isEdit ? 'עדכן את הפרטים ושמור' : 'מלא ידנית או סרוק את הברקוד במצלמה'}
+      </p>
 
       <div className="flex flex-col gap-4">
         <label>
@@ -64,6 +91,17 @@ export default function AddVoucherForm({ onClose }) {
             placeholder="למשל: BuyMe, שופרסל..."
             className={field}
             autoFocus
+          />
+        </label>
+
+        <label>
+          <span className="mb-1 block font-semibold">מקור / מנפיק</span>
+          <input
+            name="source"
+            value={form.source}
+            onChange={handleChange}
+            placeholder="למשל: מפעל הפיס (אופציונלי)"
+            className={field}
           />
         </label>
 
@@ -110,6 +148,19 @@ export default function AddVoucherForm({ onClose }) {
               📷 סרוק
             </button>
           </div>
+        </label>
+
+        <label>
+          <span className="mb-1 block font-semibold">קוד אימות (CVV)</span>
+          <input
+            name="cvv"
+            inputMode="numeric"
+            dir="ltr"
+            value={form.cvv}
+            onChange={handleChange}
+            placeholder="אופציונלי"
+            className={`${field} font-mono`}
+          />
         </label>
 
         {/* הסורק מוצג רק כש-scanning פעיל — רינדור מותנה */}
@@ -161,7 +212,7 @@ export default function AddVoucherForm({ onClose }) {
             onClick={handleSave}
             className="flex-1 rounded-xl bg-keep py-3 font-display font-bold text-white hover:opacity-90"
           >
-            שמור שובר
+            {isEdit ? 'שמור שינויים' : 'שמור שובר'}
           </button>
           <button
             onClick={onClose}

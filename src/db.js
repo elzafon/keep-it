@@ -26,14 +26,32 @@ export function addVoucher(voucher) {
   })
 }
 
+/** הוספת כמה שוברים בבת אחת — לזרימת ההדבקה מ-SMS */
+export function bulkAddVouchers(list) {
+  const createdAt = new Date().toISOString()
+  return db.vouchers.bulkAdd(
+    list.map((voucher) => ({ ...voucher, redeemed: 0, createdAt })),
+  )
+}
+
 /** סימון שובר כמומש (או ביטול הסימון) */
 export function toggleRedeemed(voucher) {
   return db.vouchers.update(voucher.id, { redeemed: voucher.redeemed ? 0 : 1 })
 }
 
+/** עדכון שדות שובר קיים (עריכה) */
+export function updateVoucher(id, changes) {
+  return db.vouchers.update(id, changes)
+}
+
 /** מחיקת שובר */
 export function deleteVoucher(id) {
   return db.vouchers.delete(id)
+}
+
+/** סימון שכבר נשלחה התראת תוקף היום — מונע התראות כפולות על אותו שובר */
+export function markNotified(id, dateKey) {
+  return db.vouchers.update(id, { notifiedOn: dateKey })
 }
 
 /** שוברים לדוגמה — כדי לראות את הדשבורד חי בלי להקליד */

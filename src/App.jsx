@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from './db'
-import { daysLeft } from './utils/expiry'
+import { db, markNotified } from './db'
+import { daysLeft, expiryLabel } from './utils/expiry'
 import VoucherCard from './components/VoucherCard'
 import AddVoucherForm from './components/AddVoucherForm'
+import PasteVouchers from './components/PasteVouchers'
 import EmptyState from './components/EmptyState'
 
 /*
@@ -17,7 +18,14 @@ import EmptyState from './components/EmptyState'
 */
 export default function App() {
   const [screen, setScreen] = useState('dashboard') // 'dashboard' | 'add'
+  const [addTab, setAddTab] = useState('manual') // 'manual' | 'paste' — רק במסך הוספה
   const [showRedeemed, setShowRedeemed] = useState(false)
+  // השובר שנמצא כרגע בעריכה (null = טופס ה"הוספה" פתוח, לא עריכה)
+  const [editing, setEditing] = useState(null)
+  // מצב ההרשאה להתראות — נקרא פעם אחת מה-API של הדפדפן
+  const [notifPermission, setNotifPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
+  )
 
   // שליפה חיה מהמסד, ממוינת: קרוב-לפוג קודם, ללא-תוקף בסוף
   const vouchers = useLiveQuery(async () => {
@@ -28,6 +36,54 @@ export default function App() {
       return da - db_
     })
   })
+
+  /*
+    תופעת לוואי (side effect): בכל פעם ש-vouchers מתעדכן, בודקים אם יש
+    שוברים שעומדים לפוג בקרוב ושולחים התראת דפדפן. השדה notifiedOn נשמר
+    על השובר עצמו כדי שלא נשלח את אותה התראה שוב באותו היום.
+    מגבלה: זה עובד רק כשהאפליקציה פתוחה בדפדפן — אין שרת שישלח
+    התראות כשהיא סגורה (Push דורש backend, וזה בניגוד לעקרון "אין שרת").
+  */
+  useEffect(() => {
+    if (!vouchers) return
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+
+    const todayKey = new Date().toISOString().slice(0, 10)
+    vouchers
+      .filter((v) => !v.redeemed)
+      .forEach((v) => {
+        const d = daysLeft(v.expiry)
+        const dueSoon = d !== null && d >= 0 && d <= 3
+        if (dueSoon && v.notifiedOn !== todayKey) {
+          new Notification(`${v.business} — השובר עומד לפוג`, {
+            body: expiryLabel(v.expiry),
+            tag: `voucher-${v.id}`,
+          })
+          markNotified(v.id, todayKey)
+        }
+      })
+  }, [vouchers])
+
+  async function enableReminders() {
+    const result = await Notification.requestPermission()
+    setNotifPermission(result)
+  }
+
+  function openAdd() {
+    setEditing(null)
+    setAddTab('manual')
+    setScreen('add')
+  }
+
+  function openEdit(voucher) {
+    setEditing(voucher)
+    setScreen('add')
+  }
+
+  function closeForm() {
+    setEditing(null)
+    setScreen('dashboard')
+  }
 
   // עד שהשליפה הראשונה מסתיימת, vouchers הוא undefined
   if (!vouchers) return null
@@ -40,26 +96,66 @@ export default function App() {
     <div className="min-h-screen pb-24">
       {/* כותרת עליונה */}
       <header className="bg-keep-deep px-4 pb-10 pt-6 text-white">
-        <div className="mx-auto max-w-2xl">
-          <h1 className="font-display text-2xl font-extrabold">
-            Keep<span className="text-amber">It</span>
-          </h1>
-          <p className="mt-1 text-sm opacity-80">
-            {active.length > 0
-              ? `${active.length} שוברים פעילים · ₪${totalAmount.toLocaleString()} שווי כולל`
-              : 'שומר על הכסף שלך'}
-          </p>
+        <div className="mx-auto flex max-w-2xl items-start justify-between">
+          <div>
+            <h1 className="font-display text-2xl font-extrabold">
+              Keep<span className="text-amber">It</span>
+            </h1>
+            <p className="mt-1 text-sm opacity-80">
+              {active.length > 0
+                ? `${active.length} שוברים פעילים · ₪${totalAmount.toLocaleString()} שווי כולל`
+                : 'שומר על הכסף שלך'}
+            </p>
+          </div>
+          {notifPermission === 'default' && (
+            <button
+              onClick={enableReminders}
+              className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20"
+            >
+              🔔 הפעל תזכורות
+            </button>
+          )}
         </div>
       </header>
 
       <main className="mx-auto -mt-5 max-w-2xl px-4">
         {screen === 'add' ? (
           <div className="rounded-2xl bg-card p-6 shadow-sm">
-            <AddVoucherForm onClose={() => setScreen('dashboard')} />
+            {/* טאבים — רק בהוספה חדשה. בעריכה תמיד טופס ידני. */}
+            {!editing && (
+              <div className="mb-6 flex gap-1 rounded-xl bg-mist p-1">
+                {[
+                  ['manual', 'מילוי ידני'],
+                  ['paste', 'הדבקה מ-SMS'],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    onClick={() => setAddTab(id)}
+                    className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
+                      addTab === id ? 'bg-card text-ink shadow-sm' : 'text-faint hover:text-ink'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/*
+              key משתנה בין 'new' לבין מזהה השובר הנערך: כש-key משתנה,
+              React הורס את הקומפוננטה הישנה ובונה חדשה עם state נקי.
+              ככה מעבר מעריכת שובר א' לשובר ב' (או ל"הוספה") תמיד פותח
+              טופס עם הערכים הנכונים, בלי קוד איפוס ידני.
+            */}
+            {editing || addTab === 'manual' ? (
+              <AddVoucherForm key={editing?.id ?? 'new'} voucher={editing} onClose={closeForm} />
+            ) : (
+              <PasteVouchers onClose={closeForm} />
+            )}
           </div>
         ) : vouchers.length === 0 ? (
           <div className="rounded-2xl bg-card p-6 shadow-sm">
-            <EmptyState onAdd={() => setScreen('add')} />
+            <EmptyState onAdd={openAdd} />
           </div>
         ) : (
           <>
@@ -67,7 +163,7 @@ export default function App() {
             <div className="flex flex-col gap-3">
               {active.map((v) => (
                 // key עוזר ל-React לזהות כל פריט ברשימה ביעילות
-                <VoucherCard key={v.id} voucher={v} />
+                <VoucherCard key={v.id} voucher={v} onEdit={openEdit} />
               ))}
               {active.length === 0 && (
                 <p className="rounded-2xl bg-card p-6 text-center text-faint shadow-sm">
@@ -88,7 +184,7 @@ export default function App() {
                 {showRedeemed && (
                   <div className="flex flex-col gap-3">
                     {redeemed.map((v) => (
-                      <VoucherCard key={v.id} voucher={v} />
+                      <VoucherCard key={v.id} voucher={v} onEdit={openEdit} />
                     ))}
                   </div>
                 )}
@@ -101,7 +197,7 @@ export default function App() {
       {/* כפתור הוספה צף */}
       {screen === 'dashboard' && vouchers.length > 0 && (
         <button
-          onClick={() => setScreen('add')}
+          onClick={openAdd}
           aria-label="הוסף שובר"
           className="fixed bottom-6 left-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-keep font-display text-3xl font-bold text-white shadow-lg hover:opacity-90"
         >

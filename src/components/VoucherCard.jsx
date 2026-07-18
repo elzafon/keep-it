@@ -17,7 +17,7 @@ const statusStyles = {
   none: 'bg-faint/10 text-faint',
 }
 
-export default function VoucherCard({ voucher }) {
+export default function VoucherCard({ voucher, onEdit }) {
   const status = expiryStatus(voucher.expiry)
   const isRedeemed = Boolean(voucher.redeemed)
   const [showBarcode, setShowBarcode] = useState(false)
@@ -33,7 +33,10 @@ export default function VoucherCard({ voucher }) {
         <div className="flex items-start justify-between gap-2">
           <div>
             <h3 className="font-display text-lg font-bold">{voucher.business}</h3>
-            <p className="text-sm text-faint">{voucher.type}</p>
+            <p className="text-sm text-faint">
+              {voucher.type}
+              {voucher.source && ` · ${voucher.source}`}
+            </p>
           </div>
           <span
             className={`rounded-full px-3 py-1 text-sm font-semibold ${statusStyles[status]}`}
@@ -50,6 +53,12 @@ export default function VoucherCard({ voucher }) {
             <span aria-hidden>▮▯▮</span>
             הצג ברקוד לסריקה
           </button>
+        )}
+
+        {voucher.cvv && (
+          <p className="mt-2 text-xs text-faint">
+            קוד אימות: <span dir="ltr" className="font-mono text-ink">{voucher.cvv}</span>
+          </p>
         )}
 
         {showBarcode && (
@@ -73,16 +82,21 @@ export default function VoucherCard({ voucher }) {
         >
           {isRedeemed ? 'החזר לפעיל' : 'סמן כמומש'}
         </button>
-        <button
-          onClick={() => {
-            if (confirm(`למחוק את השובר של ${voucher.business}?`)) {
-              deleteVoucher(voucher.id)
-            }
-          }}
-          className="text-xs text-faint hover:text-danger"
-        >
-          מחק
-        </button>
+        <div className="flex w-full justify-between text-xs">
+          <button onClick={() => onEdit(voucher)} className="text-faint hover:text-ink">
+            ערוך
+          </button>
+          <button
+            onClick={() => {
+              if (confirm(`למחוק את השובר של ${voucher.business}?`)) {
+                deleteVoucher(voucher.id)
+              }
+            }}
+            className="text-faint hover:text-danger"
+          >
+            מחק
+          </button>
+        </div>
       </div>
     </article>
   )
