@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { fetchVouchers } from '../db'
 
@@ -9,26 +9,34 @@ import { fetchVouchers } from '../db'
      בן/בת הזוג) מפעיל שליפה מחדש — כך שני הצדדים רואים אותו מצב.
 
   חשוב: נרשמים ל-Realtime רק כשיש משתמש מחובר (session). Realtime מכבד
-  RLS, ולכן הערוץ חייב token מחובר כדי לקבל אירועים. לכן ה-effect תלוי
-  ב-userId — הוא נבנה מחדש בכניסה/יציאה.
+  RLS, ולכן הערוץ חייב token מחובר כדי לקבל אירועים.
 
-  מחזיר null בזמן הטעינה הראשונה (כמו useLiveQuery), ואז מערך שוברים.
+  מחזיר { vouchers, error, reload }:
+  - vouchers: null בזמן טעינה, אחרת מערך.
+  - error: כשל שליפה מוצג למשתמש במקום להתחזות ל"אין שוברים"
+    (אחרת ניתוק רשת נראה כאילו כל הנתונים נמחקו).
 */
 export function useVouchers(session) {
   const [vouchers, setVouchers] = useState(null)
+  const [error, setError] = useState(null)
   const userId = session?.user?.id
+
+  const load = useCallback(() => {
+    if (!userId) return
+    fetchVouchers()
+      .then((data) => {
+        setVouchers(data)
+        setError(null)
+      })
+      .catch((err) => setError(err?.message || 'שגיאת רשת'))
+  }, [userId])
 
   useEffect(() => {
     if (!userId) {
       setVouchers(null)
+      setError(null)
       return
     }
-
-    let active = true
-    const load = () =>
-      fetchVouchers()
-        .then((data) => active && setVouchers(data))
-        .catch(() => active && setVouchers([]))
 
     load()
 
@@ -39,10 +47,9 @@ export function useVouchers(session) {
       .subscribe()
 
     return () => {
-      active = false
       supabase.removeChannel(channel)
     }
-  }, [userId])
+  }, [userId, load])
 
-  return vouchers
+  return { vouchers, error, reload: load }
 }

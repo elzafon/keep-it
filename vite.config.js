@@ -25,7 +25,7 @@ export default defineConfig({
       manifest: {
         name: 'KeepIt — השוברים שלי',
         short_name: 'KeepIt',
-        description: 'ניהול שוברים, גיפט קארדים וקופונים — הכול על המכשיר שלך',
+        description: 'ניהול שוברים, גיפט קארדים וקופונים — משותף ומסונכרן',
         dir: 'rtl',
         lang: 'he',
         display: 'standalone',      // בלי שורת כתובת — מרגיש כמו אפליקציה

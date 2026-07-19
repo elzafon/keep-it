@@ -15,8 +15,8 @@ import Login from './components/Login'
   שני רעיונות מרכזיים כאן:
   1. "ניתוב" פשוט עם useState — screen קובע איזה מסך מוצג.
      כשהאפליקציה תגדל, נחליף את זה ב-react-router.
-  2. useLiveQuery — hook של Dexie שמאזין למסד הנתונים:
-     כל שינוי (הוספה/מחיקה/עדכון) מרנדר מחדש אוטומטית. אין צורך "לרענן".
+  2. useVouchers — שליפה מ-Supabase עם מנוי Realtime: כל שינוי בטבלה
+     (גם ממכשיר אחר) מרנדר מחדש אוטומטית. אין צורך "לרענן".
 */
 export default function App() {
   const [screen, setScreen] = useState('dashboard') // 'dashboard' | 'add'
@@ -44,7 +44,7 @@ export default function App() {
 
   // שליפה מ-Supabase עם עדכון בזמן אמת, ואז מיון: קרוב-לפוג קודם.
   // מעבירים session כדי שה-hook יירשם ל-Realtime רק כשמחוברים.
-  const raw = useVouchers(session)
+  const { vouchers: raw, error: loadError, reload } = useVouchers(session)
   const vouchers =
     raw &&
     [...raw].sort((a, b) => (daysLeft(a.expiry) ?? Infinity) - (daysLeft(b.expiry) ?? Infinity))
@@ -71,7 +71,8 @@ export default function App() {
             body: expiryLabel(v.expiry),
             tag: `voucher-${v.id}`,
           })
-          markNotified(v.id, todayKey)
+          // catch — כישלון עדכון לא צריך להפיל כלום (לכל היותר תישלח שוב מחר)
+          markNotified(v.id, todayKey).catch(() => {})
         }
       })
   }, [vouchers])
@@ -104,6 +105,24 @@ export default function App() {
   // שער אימות: עד שקראנו את ה-session — לא מציגים כלום; בלי session — מסך כניסה
   if (!authReady) return null
   if (!session) return <Login />
+
+  // כשל שליפה מוצג במפורש — אחרת ניתוק רשת נראה כמו "אין שוברים"
+  if (loadError && !vouchers) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="w-full max-w-sm rounded-2xl bg-card p-8 text-center shadow-sm">
+          <p className="font-semibold text-danger">טעינת השוברים נכשלה</p>
+          <p className="mt-2 text-sm text-faint">בדקו את החיבור לאינטרנט ונסו שוב.</p>
+          <button
+            onClick={reload}
+            className="mt-5 w-full rounded-xl bg-keep py-3 font-display font-bold text-white hover:opacity-90"
+          >
+            נסה שוב
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   // עד שהשליפה הראשונה מסתיימת, vouchers הוא null
   if (!vouchers) return null

@@ -107,20 +107,34 @@ export async function bulkAddVouchers(list) {
   if (error) throw error
 }
 
+// מחיקת קובץ מ-Storage — best-effort (כישלון לא מפיל את הפעולה הראשית)
+async function removeStoredImage(path) {
+  if (!path) return
+  imageCache.delete(path)
+  const { error } = await supabase.storage.from(BUCKET).remove([path])
+  if (error) console.warn('[KeepIt] מחיקת תמונה מ-Storage נכשלה:', path, error.message)
+}
+
 /** עדכון שדות שובר קיים (עריכה מהטופס) */
 export async function updateVoucher(id, changes) {
   const image_path = await resolveImagePath(changes)
+  // שולפים את הנתיב הישן כדי למחוק את הקובץ אם התמונה הוחלפה/הוסרה
+  const { data: old } = await supabase.from(TABLE).select('image_path').eq('id', id).single()
   const { error } = await supabase
     .from(TABLE)
     .update({ ...toRow(changes), image_path })
     .eq('id', id)
   if (error) throw error
+  if (old?.image_path && old.image_path !== image_path) {
+    await removeStoredImage(old.image_path)
+  }
 }
 
-/** מחיקת שובר */
+/** מחיקת שובר — כולל התמונה שלו מה-Storage (אחרת נשארת יתומה בענן) */
 export async function deleteVoucher(id) {
-  const { error } = await supabase.from(TABLE).delete().eq('id', id)
+  const { data, error } = await supabase.from(TABLE).delete().eq('id', id).select('image_path')
   if (error) throw error
+  await removeStoredImage(data?.[0]?.image_path)
 }
 
 /** סימון שובר כמומש (או ביטול) */
@@ -132,9 +146,16 @@ export async function toggleRedeemed(voucher) {
   if (error) throw error
 }
 
-/** סימון שכבר נשלחה התראת תוקף היום — מונע התראות כפולות */
+/** סימון שכבר נשלחה התראת תוקף היום — מונע התראות כפולות.
+    התנאי על notified_on הופך את העדכון לאידמפוטנטי: אם מכשיר אחר כבר
+    סימן היום, לא נכתבת שורה ולא נורה אירוע Realtime מיותר. */
 export async function markNotified(id, dateKey) {
-  const { error } = await supabase.from(TABLE).update({ notified_on: dateKey }).eq('id', id)
+  const { error } = await supabase
+    .from(TABLE)
+    .update({ notified_on: dateKey })
+    .eq('id', id)
+    // is.null נדרש כי ב-SQL השוואת NULL עם neq לא מחזירה אמת
+    .or(`notified_on.is.null,notified_on.neq.${dateKey}`)
   if (error) throw error
 }
 

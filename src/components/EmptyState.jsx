@@ -9,7 +9,7 @@ export default function EmptyState({ onAdd }) {
       </div>
       <h2 className="font-display text-xl font-bold">אין כאן שוברים עדיין</h2>
       <p className="mx-auto mt-2 max-w-xs text-faint">
-        כל גיפט קארד, קופון או תו קנייה שתוסיף יישמר כאן — על המכשיר שלך בלבד.
+        כל גיפט קארד, קופון או תו קנייה שתוסיפו יישמר בענן ויסונכרן בין המכשירים שלכם.
       </p>
       <div className="mt-6 flex justify-center gap-3">
         <button

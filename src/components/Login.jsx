@@ -18,7 +18,12 @@ export default function Login() {
     setError('')
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin },
+      options: {
+        emailRedirectTo: window.location.origin,
+        // אבטחה: לא יוצרים משתמשים חדשים — רק שני החשבונות הקיימים
+        // יכולים להיכנס. מונע הרשמה פתוחה וניצול לשליחת ספאם-מיילים.
+        shouldCreateUser: false,
+      },
     })
     setLoading(false)
     if (error) setError('שליחה נכשלה: ' + error.message)

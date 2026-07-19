@@ -46,8 +46,13 @@ export default function PasteVouchers({ onClose }) {
       business: row.business.trim(),
       amount: row.amount ? Number(row.amount) : null,
     }))
-    await bulkAddVouchers(payload)
-    onClose() // חוזרים לדשבורד — הרשימה תתעדכן לבד
+    try {
+      await bulkAddVouchers(payload)
+      onClose() // חוזרים לדשבורד — הרשימה תתעדכן לבד
+    } catch (err) {
+      // בלי זה כישלון (רשת/הרשאות) היה עובר בשקט והמשתמש בטוח ששמר
+      setError('שמירה נכשלה: ' + (err?.message || String(err)))
+    }
   }
 
   const field =
@@ -199,6 +204,8 @@ export default function PasteVouchers({ onClose }) {
           </div>
         ))}
       </div>
+
+      {error && <p className="mt-3 font-semibold text-danger">{error}</p>}
 
       <div className="mt-5 flex gap-3">
         <button
