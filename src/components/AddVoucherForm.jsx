@@ -8,6 +8,60 @@ import { addVoucher, updateVoucher } from '../db'
 */
 const BarcodeScanner = lazy(() => import('./BarcodeScanner'))
 
+// טוען כתובת תמונה לאלמנט <img> ומחזיר Promise שנפתר כשהתמונה מוכנה לציור על canvas
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = url
+  })
+}
+
+// מנסה לפענח ברקוד מאזור מלבני בתמונה, כשהוא מצויר (ואולי מוגדל) על canvas.
+// הגדלת אזור קטן נותנת ל-zxing יותר פיקסלים לעבוד איתם. מחזיר טקסט או null.
+function tryDecodeRegion(reader, img, sx, sy, sw, sh) {
+  const canvas = document.createElement('canvas')
+  const scale = Math.min(3, Math.max(1, 1400 / sw))
+  canvas.width = Math.round(sw * scale)
+  canvas.height = Math.round(sh * scale)
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
+  try {
+    return reader.decodeFromCanvas(canvas).getText()
+  } catch {
+    return null // decodeFromCanvas זורק כשלא נמצא קוד — לא שגיאה אמיתית
+  }
+}
+
+// אסטרטגיית זיהוי: קודם כל התמונה, ואם נכשל — פריסה לאריחים חופפים ומוגדלים.
+// ככה מוצאים ברקוד קטן שיושב באזור כלשהו בתוך צילום מלא.
+async function decodeBarcodeFromImage(reader, url) {
+  const img = await loadImage(url)
+  const W = img.naturalWidth
+  const H = img.naturalHeight
+
+  const full = tryDecodeRegion(reader, img, 0, 0, W, H)
+  if (full) return full
+
+  const cols = 2
+  const rows = 3
+  const overlap = 0.2 // חפיפה בין אריחים כדי לא לחתוך ברקוד שנופל על גבול
+  const tileW = W / cols
+  const tileH = H / rows
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const sx = Math.max(0, tileW * c - tileW * overlap)
+      const sy = Math.max(0, tileH * r - tileH * overlap)
+      const sw = Math.min(W - sx, tileW * (1 + 2 * overlap))
+      const sh = Math.min(H - sy, tileH * (1 + 2 * overlap))
+      const text = tryDecodeRegion(reader, img, sx, sy, sw, sh)
+      if (text) return text
+    }
+  }
+  return null
+}
+
 /*
   טופס הוספה *ועריכה* בקומפוננטה אחת — דוגמה קלאסית ל"controlled inputs":
   כל שדה בטופס מחובר ל-state, ו-React הוא מקור האמת היחיד לערך שלו.
@@ -105,14 +159,23 @@ export default function AddVoucherForm({ onClose, voucher = null }) {
         BarcodeFormat.CODE_128,
         BarcodeFormat.CODE_39,
         BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
         BarcodeFormat.ITF,
       ])
       const reader = new BrowserMultiFormatReader(hints)
       const url = URL.createObjectURL(form.image)
       try {
-        const result = await reader.decodeFromImageUrl(url)
-        setForm((prev) => ({ ...prev, barcode: result.getText() }))
-        setScanMsg('✓ הקוד נשלף מהתמונה')
+        // בצילום מלא (למשל צילום מסך של תלוש) הברקוד תופס אזור קטן,
+        // ו-zxing על כל התמונה בבת-אחת לרוב לא מוצא אותו. לכן מנסים קודם
+        // את כל התמונה, ואם נכשל — סורקים אריחים חופפים ומוגדלים.
+        const text = await decodeBarcodeFromImage(reader, url)
+        if (text) {
+          setForm((prev) => ({ ...prev, barcode: text }))
+          setScanMsg('✓ הקוד נשלף מהתמונה')
+        } else {
+          setScanMsg('לא זוהה קוד בתמונה — נסה לחתוך את הצילום לאזור הקוד/QR, או הקלד ידנית')
+        }
       } finally {
         URL.revokeObjectURL(url)
       }
